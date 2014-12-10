@@ -1,5 +1,6 @@
 /* astronaut xml */
 
+#include <cstring>
 #include <iostream>
 #include <fstream>
 using namespace std;
@@ -95,7 +96,10 @@ public:
 int main(int argc, char* argv[])
 {
     //XMLObject* xml;
-    int xml = ParseFile("index.html");
+    char* file = "index.html";
+    if (argc > 1) file = argv[1];
+
+    int xml = ParseFile(file);
 
     if (xml) {
         //xml->Print();
@@ -120,12 +124,16 @@ ParseText(const char* buffer, int size)
 */
     // parsing variables
     unsigned int seek_a, seek_b;
+    unsigned int inner_a, inner_b;
     int token;
     bool parsing;
     //XMLObject* root;
     //XMLObject* level;
     int result;
     int level = 0;
+
+    bool matching_content = false;
+    char* matching_tag = NULL;
 
     // init parser state
     seek_a = seek_b = 0;
@@ -134,12 +142,17 @@ ParseText(const char* buffer, int size)
     //root = NULL;
     //level = NULL;
 
+    inner_a = inner_b = 0;
+
     // parse input
     while (parsing &&
            seek_a < size) 
     {
         //cout << "a: " << seek_a << endl;
         if (buffer[seek_a] == '<') {
+            // check for content between tags
+            if (inner_a < seek_a) inner_b = seek_a;
+
             // block comments
             if ((seek_a + 3) < size &&
                 buffer[seek_a+1] == '!' &&
@@ -175,8 +188,8 @@ ParseText(const char* buffer, int size)
             // check for self-closing tag
             if (seek_b && buffer[seek_b-1] == '/') {
                 self_closing = true;
-                //cout << "self-closing" << endl;
             } else {
+                self_closing = false;
                 //cout << "normal" << endl;
             }
 
@@ -197,7 +210,8 @@ ParseText(const char* buffer, int size)
                 // tag name is between text_a and text_b
                 char* name;
                 unsigned int len;
-                unsigned int i;
+                //unsigned int i;
+                int i;
 
                 len = text_b - text_a;
                 name = new char[len+1];
@@ -230,6 +244,28 @@ ParseText(const char* buffer, int size)
                     attr = NULL;
                 }*/
 
+                if (matching_content && (!closing ||
+                        strcmp(name, matching_tag) != 0))
+                {
+                    seek_a++;
+                    continue;
+                }
+
+                if ((inner_b - inner_a) > 0 && inner_b < size && inner_b > inner_a) 
+                {
+                    char* content;
+                    unsigned int content_len;
+                    unsigned int j;
+
+                    content_len = inner_b - inner_a;
+                    content = new char[content_len+1];
+                    for (j = 0; j < content_len; j++)
+                        content[j] = buffer[inner_a + j];
+                    content[content_len] = '\0';
+
+                    cout << "content: '" << content << "'" << endl;
+                }
+
                 //cout << "name" << endl;
                 // check for opening 
                 // or closing tag
@@ -251,16 +287,24 @@ ParseText(const char* buffer, int size)
                         return 0;
                     }*/
 
-                    cout << "name: ";
-                    //for (i = 0; i < level; i++)
-                    //    cout << "  ";
-                    //if (level < 0) {
-                    //    cout << "error: mismatched tags." << endl;
-                    //    return 0;
-                    //}
-
-                    cout << "/" << name << endl;
+                    //cout << "name: ";
                     level--;
+
+                    for (i = 0; i < level; i++)
+                        cout << "  ";
+                    if (level < 0) {
+                        cout << "error: mismatched tags." << endl;
+                        return 0;
+                    }
+
+                    cout << "<" << "/" << name << ">" << endl;
+
+                    if (matching_content) {
+                        matching_content = false;
+                        matching_tag = NULL;
+                    }
+
+                    //if (strcmp(name, "html")) return 0;
                 } else {
                     // opening tag
                     /*if (self_closing) { }
@@ -272,14 +316,33 @@ ParseText(const char* buffer, int size)
                         root = new XMLObject(name, attr, self_closing);
                         level = root->next();
                     }*/
-                    cout << "name: ";
-                    //for (i = 0; i < level; i++)
-                    //    cout << "  ";
-                    cout << name << endl;
-                    level++;
+                    //cout << "name: ";
+                    for (i = 0; i < level; i++)
+                        cout << "  ";
+                    cout << "<" << name << ">" << endl;
+
+                    if (!self_closing) level++;
+
+                    if (strcmp(name, "script") == 0 ||
+                        strcmp(name, "style") == 0)
+                    {
+                        matching_content = true;
+                        matching_tag = name;
+                    } else {
+                        matching_content = false;
+                        matching_tag = NULL;
+                    }
                 }
 
+                cout << "attr: '"; 
+                for (i = text_b; i < seek_b - 1 || (buffer[seek_b-1] != '/' && i < seek_b); i++) {
+                    cout << buffer[i]; 
+                }
+                cout << "'" << endl;
+
                 seek_a = seek_b + 1;
+                inner_a = inner_b = seek_a;
+
                 // add to object
                 //if (level) {
                 //    result.add(name, attr, closing, self_closing);
@@ -300,7 +363,11 @@ ParseText(const char* buffer, int size)
             seek_a++;
         }
     }
-
+/*
+    if (inner_a < seek_a - 1) {
+        // add final
+    }
+*/
     return 1;
 }
 
