@@ -41,22 +41,29 @@ private:
 class XMLBlock
 {
 public:
-    XMLBlock(string tag_name, string content) 
-    {
-        mTagName = tag_name;
-        mContent = content;
-    }
+
     XMLBlock(string tag_name)
     {
         mTagName = tag_name;
         mContent = "";
+        mAttributes = "";
+        mClosed = false;
+    }
+
+    XMLBlock(string tag_name, string content) 
+    {
+        mTagName = tag_name;
+        mContent = content;
+        mAttributes = "";
+        mClosed = false;
     }
 
     ~XMLBlock();
 
-    void AddAttr(string attr_name, value attribute) 
+    void AddAttr(std::string attribute)/*(string attr_name, value attribute) */
     {
-        mAttributes.insert(pair<string, value>(attr_name, attribute));
+//        mAttributes.insert(pair<string, value>(attr_name, attribute));
+        mAttributes = attribute;
     }
 
     void AddChild(XMLBlock* block)
@@ -68,10 +75,72 @@ public:
     {
         return mTagName;
     }
+
+    void SetContent(string content) 
+    {
+        mContent = content;
+    }
+
+    string GetContent()
+    {
+        return mContent;
+    }
+
+    bool IsClosed() {
+        return mClosed;
+    }
+
+    void Match() {
+        mClosed = true;
+    }
+
+    void Print()
+    {
+        this->Print(0);   
+    }
+
+    void Print(int level)
+    {
+        int i,j;
+        for (j = 0; j < level*2; j++) cout << " ";
+        cout << "{\n";
+
+        for (j = 0; j < level*2 + 4; j++) cout << " ";
+        cout << "name: " << mTagName << "\n";
+
+        for (j = 0; j < level*2 + 4; j++) cout << " ";
+        cout << "level: " << level << "\n";
+
+
+//        if (mAttributes.count("attributes") > 0) {
+        if (mAttributes.length()) {
+            for (j = 0; j < level*2 + 4; j++) cout << " ";
+            cout << "attributes: " << mAttributes << "\n";
+        }
+
+        for (j = 0; j < level*2 + 4; j++) cout << " ";
+        cout << "content: " << mContent << "\n";
+
+        for (j = 0; j < level*2 + 4; j++) cout << " ";
+        cout << "children: \n";
+
+        for (i = 0; i < mChildren.size(); i++) {
+            mChildren[i]->Print(level+1);
+            if (i < mChildren.size() - 1) {
+                cout << ",";
+            }
+            cout << "\n";
+        }
+
+        for (j = 0; j < level*2; j++) cout << " ";
+        cout << "}";
+    }
 protected:
+    bool                mClosed;
     string              mTagName;
     string              mContent;
-    map<string, value>  mAttributes;
+    string              mAttributes;
+//    map<string, value>  mAttributes;
     vector<XMLBlock*>   mChildren;
 };
 
@@ -105,10 +174,12 @@ int ParseText(const char* buffer, int size)
 */
     vector<XMLBlock*>   parsed;
     vector<XMLBlock*>   blocks;
-
+    XMLBlock*           working = NULL;
+    
     // parsing variables
     unsigned int seek_a, seek_b;
     unsigned int inner_a, inner_b;
+    std::string buffer_str(buffer);
     int token;
     bool parsing;
     int result;
@@ -121,8 +192,6 @@ int ParseText(const char* buffer, int size)
     seek_a = seek_b = 0;
     token = 0;
     parsing = true;
-    //root = NULL;
-    //level = NULL;
 
     inner_a = inner_b = 0;
 
@@ -211,12 +280,14 @@ int ParseText(const char* buffer, int size)
                        (!closing ||
                         strcmp(name, matching_tag) != 0))
                 {
+                    delete name;
                     seek_a++;
                     continue;
                 }
 
                 // content of previous tag
-                if ((inner_b - inner_a) > 0 && inner_b < size && inner_b > inner_a) 
+                if ((inner_b - inner_a) > 0 && inner_b < size && inner_b > inner_a
+                    && working) 
                 {
                     char* content;
                     unsigned int content_len;
@@ -228,24 +299,64 @@ int ParseText(const char* buffer, int size)
                         content[j] = buffer[inner_a + j];
                     content[content_len] = '\0';
 
-                    cout << "content: '" << content << "'" << endl;
+                    working->SetContent(std::string(content));
+                    //cout << "content: '" << content << "'" << endl;
+                    delete content;
                 }
 
                 // check for opening 
                 // or closing tag
                 if (closing) {
                     // closing tag
+                    cout << "Closing tag '" << name << "'\n";
 
-                    level--;
+                    int i, j, nsize;
+                    nsize = blocks.size();
+                    for (i = nsize - 1; i >= 0; i--)
+                    {
+                        if (blocks[i]->GetName() == name &&
+                            blocks[i]->IsClosed() == false) 
+                        {
+                            XMLBlock* parent = blocks[i];
 
-                    for (i = 0; i < level; i++)
-                        cout << "  ";
-                    if (level < 0) {
-                        cout << "error: mismatched tags." << endl;
-                        return 0;
+                            /* close block */
+                            for (j = i+1; j < nsize; j++)
+                            {
+                                parent->AddChild(blocks[j]);
+                            }
+                            parent->Match();
+
+                            if (i == 0) {
+                                /* pop off elements */
+                                XMLBlock* block = NULL;
+                                while (block != parent && blocks.size()) 
+                                {
+                                    block = blocks[blocks.size()-1];
+                                    /*block = */ blocks.pop_back();
+                                }
+                                parsed.push_back(parent);
+                            } else {
+                                for (j = i+1; j < nsize; j++)
+                                    blocks.pop_back();
+                            }
+                            
+                            /* pointer to tail */
+                            if (blocks.size()) {
+                                if (blocks.size() > 1) 
+                                    working = blocks[blocks.size() - 2];
+                                else
+                                    working = blocks[blocks.size() - 1];
+                            } else {
+                                working = NULL;
+                            }
+
+                            break;
+                        }
                     }
 
-                    cout << "<" << "/" << name << ">" << endl;
+                    if (i == nsize) {
+                        cout << "Error: mis-matched closing tag '" << name << "'.\n";
+                    }
 
                     if (matching_content) {
                         matching_content = false;
@@ -253,29 +364,44 @@ int ParseText(const char* buffer, int size)
                     }
 
                 } else {
+                    // new object
+                    working = new XMLBlock(std::string(name));
+                    blocks.push_back(working);
+
                     // opening tag
-                    for (i = 0; i < level; i++)
-                        cout << "  ";
-                    cout << "<" << name << ">" << endl;
 
-                    if (!self_closing) level++;
+                    // tag attributes
+                    int tag_end;
+                    for (i = text_b; i < seek_b - 1 || (buffer[seek_b-1] != '/' && i < seek_b); i++);
+                    tag_end = i;
 
-                    if (strcmp(name, "script") == 0 ||
-                        strcmp(name, "style") == 0)
-                    {
-                        matching_content = true;
-                        matching_tag = name;
+                    std::string attr_string = buffer_str.substr(text_b, tag_end - text_b);
+
+                    /* split_attrs(attr_str) */
+                    working->AddAttr(attr_string); //(string("attributes"), value(attr_str));
+
+                    if (self_closing) {
+                        working->Match();
+//                        blocks.pop_back();
+//                        parsed.push_back(working);
+//                        if (blocks.size()) {
+//                            working = blocks[blocks.size() - 1];
+//                        } else {
+//                            working = NULL;
+//                        }
                     } else {
-                        matching_content = false;
-                        matching_tag = NULL;
+                        if (strcmp(name, "script") == 0 ||
+                            strcmp(name, "style") == 0)
+                        {
+                            matching_content = true;
+                            matching_tag = name;
+                        } else {
+                            matching_content = false;
+                            matching_tag = NULL;
+                        }
                     }
                 }
-
-                cout << "attr: '"; 
-                for (i = text_b; i < seek_b - 1 || (buffer[seek_b-1] != '/' && i < seek_b); i++) {
-                    cout << buffer[i]; 
-                }
-                cout << "'" << endl;
+                //delete name;
 
                 seek_a = seek_b + 1;
                 inner_a = inner_b = seek_a;
@@ -293,8 +419,34 @@ int ParseText(const char* buffer, int size)
             seek_a++;
         }
     }
+/*
+    cout << parsed.size() << " parsed XMLBlocks and " << blocks.size() << " blocks left un-matched.\n";
+
+    int i;
+    cout << "Parsed Blocks:\n";
+    for (i = 0; i < parsed.size(); i++)
+    {
+        parsed[i]->Print();
+    }
+
+    cout << "\nLeft-over Blocks:\n";
+    for (i = 0; i < blocks.size(); i++)
+    {
+        blocks[i]->Print();
+    }
+*/
+
+    parsed.insert(parsed.end(), blocks.begin(), blocks.end());
+
+    int i;
+    cout << "Parsed Blocks:\n";
+    for (i = 0; i < parsed.size(); i++)
+    {
+        parsed[i]->Print();
+    }
 
     return 1;
+//    return parsed;
 }
 
 // ParseFile
