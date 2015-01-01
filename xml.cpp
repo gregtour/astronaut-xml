@@ -11,6 +11,7 @@
 
 using namespace std;
 
+/* attribute value struct */
 class value
 {
     enum VALUE_TYPE { VALUE_STRING, VALUE_INT, VALUE_NUMBER };
@@ -36,6 +37,7 @@ private:
     float   number;
 };
 
+/* XMLBlock class */
 class XMLBlock
 {
 public:
@@ -54,13 +56,17 @@ public:
 
     void AddAttr(string attr_name, value attribute) 
     {
-//        mAttributes.insert(attr_name, attribute);
         mAttributes.insert(pair<string, value>(attr_name, attribute));
     }
 
     void AddChild(XMLBlock* block)
     {
         mChildren.push_back(block);
+    }
+
+    string GetName()
+    {
+        return mTagName;
     }
 protected:
     string              mTagName;
@@ -70,114 +76,25 @@ protected:
 };
 
 // function declarations
-//XMLObject* 
 int ParseFile(const char* buffer, int size);
-//XMLObject* 
 int ParseFile(const char* filename);
-/*
-// list type
-template <Type>
-class ListEntry {
 
-}
-
-template <Type>
-class List {
-public:
-    List();
-    List(Type arr[], int length);
-
-    int add(Type element) {
-        last->next = 
-    }
-private:
-
-};
-
-// XMLObject type
-class XMLObject 
-{
-public:
-    XMLObject(const char* name, const char* attributes, bool self_closing)
-    {
-        mName = name;
-        mContent = NULL;
-        mAttributes = attributes;
-        mSelfClosing = self_closing;
-
-        parent = NULL;
-        last = NULL;
-        next = NULL;
-        firstChild = NULL;
-    }
-
-    ~XMLObject() {
-        if (mName) delete[] mName;
-        if (mContent) delete[] mContent;
-        if (mAttributes) delete[] mAttributes;
-        if (firstChild) delete firstChild;
-        if (next) delete next;
-    }
-
-    void add(const char* name, const char* attributes, bool self_closing) 
-    {
-        next = new XMLObject(name, attributes, self_closing);
-        next->parent = parent;
-        
-    }
-    bool tagIs(const char* tag);
-    void close();
-    XMLObject* next();
-    XMLObject* parent();
-
-private:
-    const char* mName;
-    const char* mContent;
-    const char* mAttributes;
-
-//  List<Attr>  mAttr;
-    bool mSelfClosing;
-    XMLObject* parent;
-    XMLObject  *last, 
-               *next;
-    XMLObject* firstChild;
-};
-*/
-/*
-class XMLObject {
-public:
-    XMLObject(const char* name, const char* attributes, bool self_closing)
-    {
-        cout << name;
-        if (self_closing) {
-            cout << '\';
-        }
-        cout << endl;
-    }
-}
-*/
 // main
 int main(int argc, char* argv[])
 {
-    //XMLObject* xml;
     const char* file = "index.html";
     if (argc > 1) file = argv[1];
 
     int xml = ParseFile(file);
 
     if (xml) {
-        //xml->Print();
-        //delete xml;
         return 0;
     }
 
     return 1;
 }
 
-// ParseText
-//XMLObject* 
-int
-ParseText(const char* buffer, int size)
+int ParseText(const char* buffer, int size)
 {
 /*  scan for <> tags with attributes
     then create an XML object containing
@@ -186,13 +103,14 @@ ParseText(const char* buffer, int size)
     look for </> closing tags that match
     to move up the stack
 */
+    vector<XMLBlock*>   parsed;
+    vector<XMLBlock*>   blocks;
+
     // parsing variables
     unsigned int seek_a, seek_b;
     unsigned int inner_a, inner_b;
     int token;
     bool parsing;
-    //XMLObject* root;
-    //XMLObject* level;
     int result;
     int level = 0;
 
@@ -212,7 +130,7 @@ ParseText(const char* buffer, int size)
     while (parsing &&
            seek_a < size) 
     {
-        //cout << "a: " << seek_a << endl;
+        // locate beginning of tag
         if (buffer[seek_a] == '<') {
             // check for content between tags
             if (inner_a < seek_a) inner_b = seek_a;
@@ -274,13 +192,11 @@ ParseText(const char* buffer, int size)
                 // tag name is between text_a and text_b
                 char* name;
                 unsigned int len;
-                //unsigned int i;
                 int i;
 
                 len = text_b - text_a;
                 name = new char[len+1];
                 
-                //cout << "cpy name" << endl;
                 // copy string
                 for (i = 0; i < len; i++)
                 {
@@ -289,32 +205,17 @@ ParseText(const char* buffer, int size)
                 name[len] = '\0';
 
                 // attr is between text_b and seek_b
-                /*
-                char* attr;
-                while (text_b < size && (buffer[text_b] == ' ' ||
-                        buffer[text_b] == '/')) 
-                {
-                    text_b++;
-                }
-                len = seek_b - text_b;
-                if (len) {
-                    //cout << "cpy attr " << len << endl;
-                    // copy attributes
-                    for (i = 0; i < len; i++) {
-                        attr[i] = buffer[text_b + i];
-                    }
-                    attr[len] = '\0';
-                } else {
-                    attr = NULL;
-                }*/
 
-                if (matching_content && (!closing ||
+                // scan over tags like <script> and <style>
+                if (matching_content && 
+                       (!closing ||
                         strcmp(name, matching_tag) != 0))
                 {
                     seek_a++;
                     continue;
                 }
 
+                // content of previous tag
                 if ((inner_b - inner_a) > 0 && inner_b < size && inner_b > inner_a) 
                 {
                     char* content;
@@ -330,28 +231,11 @@ ParseText(const char* buffer, int size)
                     cout << "content: '" << content << "'" << endl;
                 }
 
-                //cout << "name" << endl;
                 // check for opening 
                 // or closing tag
                 if (closing) {
                     // closing tag
-                    /*while (level) {
-                        if (level->tagIs(name)) 
-                        {
-                            level->close();
-                            level = level->next();
-                        } else {
-                            level = level->parent();
-                        }
-                    }*/
-                    /*
-                    if (level == NULL) {
-                        // error with mismatched tags
-                        //if (root) delete root;
-                        return 0;
-                    }*/
 
-                    //cout << "name: ";
                     level--;
 
                     for (i = 0; i < level; i++)
@@ -368,19 +252,8 @@ ParseText(const char* buffer, int size)
                         matching_tag = NULL;
                     }
 
-                    //if (strcmp(name, "html")) return 0;
                 } else {
                     // opening tag
-                    /*if (self_closing) { }
-                    // if tree has been initialized
-                    if (root && level) {
-                        level->add(name, attr, self_closing);
-                        level = level->next();
-                    } else {
-                        root = new XMLObject(name, attr, self_closing);
-                        level = root->next();
-                    }*/
-                    //cout << "name: ";
                     for (i = 0; i < level; i++)
                         cout << "  ";
                     cout << "<" << name << ">" << endl;
@@ -408,17 +281,10 @@ ParseText(const char* buffer, int size)
                 inner_a = inner_b = seek_a;
 
                 // add to object
-                //if (level) {
-                //    result.add(name, attr, closing, self_closing);
-                //}
-                //else {
-                //    result = new XMLObject(name, attr, closing, self_closing);
-                //}
+
             } else {
                 // end of input, error
-                /*if (root) {
-                    delete root;
-                }*/
+
                 return 0;
             }
         }
@@ -427,18 +293,12 @@ ParseText(const char* buffer, int size)
             seek_a++;
         }
     }
-/*
-    if (inner_a < seek_a - 1) {
-        // add final
-    }
-*/
+
     return 1;
 }
 
 // ParseFile
-//XMLObject* 
-int
-ParseFile(const char* filename)
+int ParseFile(const char* filename)
 {
     char* Text;
     ifstream file;
@@ -459,7 +319,6 @@ ParseFile(const char* filename)
         size = (int)length + 1;
 
         /* parse text data by tags */
-        //XMLObject* result;
         cout << filename << endl;
         cout << length << endl;
         int result = ParseText(Text, size);
