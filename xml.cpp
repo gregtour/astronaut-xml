@@ -1,9 +1,73 @@
 /* astronaut xml */
 
+#include <cstdlib>
 #include <cstring>
+#include <string>
+#include <vector>
 #include <iostream>
 #include <fstream>
+#include <map>
+
+
 using namespace std;
+
+class value
+{
+    enum VALUE_TYPE { VALUE_STRING, VALUE_INT, VALUE_NUMBER };
+
+public:
+    value(string s) { mType = VALUE_STRING; this->str = s; }
+    value(int i) { mType = VALUE_INT; this->integer = i; }
+    value(float n) { mType = VALUE_NUMBER; this->number = n; }
+    ~value() {}
+
+    string toString() { 
+        switch (mType) { 
+            case VALUE_STRING: return str;
+            case VALUE_INT: return "integer";
+            case VALUE_NUMBER: return "number";
+            default: return "no value";
+        }
+    }
+private:
+    int mType;
+    string  str;
+    int     integer;
+    float   number;
+};
+
+class XMLBlock
+{
+public:
+    XMLBlock(string tag_name, string content) 
+    {
+        mTagName = tag_name;
+        mContent = content;
+    }
+    XMLBlock(string tag_name)
+    {
+        mTagName = tag_name;
+        mContent = "";
+    }
+
+    ~XMLBlock();
+
+    void AddAttr(string attr_name, value attribute) 
+    {
+//        mAttributes.insert(attr_name, attribute);
+        mAttributes.insert(pair<string, value>(attr_name, attribute));
+    }
+
+    void AddChild(XMLBlock* block)
+    {
+        mChildren.push_back(block);
+    }
+protected:
+    string              mTagName;
+    string              mContent;
+    map<string, value>  mAttributes;
+    vector<XMLBlock*>   mChildren;
+};
 
 // function declarations
 //XMLObject* 
@@ -96,7 +160,7 @@ public:
 int main(int argc, char* argv[])
 {
     //XMLObject* xml;
-    char* file = "index.html";
+    const char* file = "index.html";
     if (argc > 1) file = argv[1];
 
     int xml = ParseFile(file);
@@ -385,14 +449,14 @@ ParseFile(const char* filename)
     file.open(filename, ios::in | ios::binary | ios::ate);
     if (file.is_open()) {
         length = file.tellg();
-        Text = new char[length+1];
+        Text = new char[(int)length+1];
 
         file.seekg(0, ios::beg);
         file.read(Text, length);
         file.close();
         Text[length] = '\0';
 
-        size = length + 1;
+        size = (int)length + 1;
 
         /* parse text data by tags */
         //XMLObject* result;
